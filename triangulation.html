@@ -1,0 +1,292 @@
+
+<!DOCTYPE HTML>
+
+<html>
+	
+<head>
+	<title>my first attempt</title>
+
+	<script type="text/javascript" src="gl-matrix.js"></script>
+	<script type="text/javascript" src="webgl-utils.js"></script>
+	
+	<script id="shader-fs" type="x-shader/x-fragment">
+	    precision mediump float;
+	
+	    void main(void) {
+	        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+	    }
+	</script>
+
+	<script id="shader-vs" type="x-shader/x-vertex">
+	    attribute vec3 aVertexPosition;
+	
+	    uniform mat4 uPMatrix;
+	
+	    void main(void) {
+	    	gl_PointSize = 4.0;
+	        gl_Position = uPMatrix * vec4(aVertexPosition, 1.0);
+	    }
+	</script>
+	
+	<script type="text/javascript">
+		var gl;
+		var shaderProgram;
+		var pMatrix = mat4.create();
+		
+		function initGL(canvas) {
+			gl = WebGLUtils.setupWebGL(canvas);
+			
+			if (!gl) {
+				return;
+			}
+			
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        	
+        	mat4.ortho(0, canvas.width, 0, canvas.height, -1, 1, pMatrix);
+		}
+		
+		function getShader(gl, id) {
+	        var shaderScript = document.getElementById(id);
+	        
+	        if (!shaderScript) {
+	            return null;
+	        }
+	
+	        var str = "";
+	        var k = shaderScript.firstChild;
+	        
+	        while (k) {
+	            if (k.nodeType == 3) {
+	                str += k.textContent;
+	            }
+	            
+	            k = k.nextSibling;
+	        }
+	
+	        var shader;
+	        
+	        if (shaderScript.type == "x-shader/x-fragment") {
+	            shader = gl.createShader(gl.FRAGMENT_SHADER);
+	        } else if (shaderScript.type == "x-shader/x-vertex") {
+	            shader = gl.createShader(gl.VERTEX_SHADER);
+	        } else {
+	            return null;
+	        }
+	
+	        gl.shaderSource(shader, str);
+	        gl.compileShader(shader);
+	
+	        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+	            alert(gl.getShaderInfoLog(shader));
+	            return null;
+	        }
+	
+	        return shader;
+	    }
+
+	    function initShaders() {
+	        var fragmentShader = getShader(gl, "shader-fs");
+	        var vertexShader = getShader(gl, "shader-vs");
+	
+	        shaderProgram = gl.createProgram();
+	        gl.attachShader(shaderProgram, vertexShader);
+	        gl.attachShader(shaderProgram, fragmentShader);
+	        gl.linkProgram(shaderProgram);
+	
+	        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+	            alert("Could not initialise shaders");
+	        }
+	
+	        gl.useProgram(shaderProgram);
+	
+	        shaderProgram.vertexPositionLoc = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+	        gl.enableVertexAttribArray(shaderProgram.vertexPositionLoc);
+	
+	        shaderProgram.pMatrixLoc = gl.getUniformLocation(shaderProgram, "uPMatrix");
+	    }
+	    
+	    var lineBuffer;
+		var pointsBuffer;
+	    
+		function initBuffers() {
+		
+		
+			var maxPoints = 10;
+			var i = 0
+			var vertices=[];
+			var points = [];
+			
+			while(i!= maxPoints)
+			{
+				var vertexElement = [];
+				vertexElement.push(getRandomInt(0,640));
+				vertexElement.push(getRandomInt(0,480));
+				vertexElement.push(0);
+				
+				points.push(vertexElement[0]);
+				points.push(vertexElement[1]);
+				points.push(0);
+				
+				vertices.push(vertexElement);
+				i++;
+			}
+			
+			var convexVertcies = [];
+			convexVertcies = getConvexHull(vertices);
+		
+			
+			var newVertices = [];
+			for (var idx in convexVertcies) {
+				var temp = convexVertcies[idx];
+				
+				for (var i in temp) {
+					newVertices.push(temp[i][0]);
+					newVertices.push(temp[i][1]);
+					newVertices.push(temp[i][2]);
+				}
+			
+			}
+			
+			console.log(newVertices);
+			console.log(points);
+			
+			lineBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, lineBuffer);
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(newVertices), gl.STATIC_DRAW);
+			
+			lineBuffer.itemSize = 3;
+			lineBuffer.numItems = newVertices.length / lineBuffer.itemSize;
+			
+			pointsBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, pointsBuffer);
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(points), gl.STATIC_DRAW);
+			
+			pointsBuffer.itemSize = 3;
+			pointsBuffer.numItems = maxPoints;
+			
+		}
+		
+		function render() {
+			gl.clear(gl.COLOR_BUFFER_BIT);
+			
+			gl.bindBuffer(gl.ARRAY_BUFFER, lineBuffer);
+			gl.vertexAttribPointer(shaderProgram.vertexPositionLoc, lineBuffer.itemSize, gl.FLOAT, false, 0, 0);
+			gl.uniformMatrix4fv(shaderProgram.pMatrixLoc, 0, pMatrix);
+			
+			gl.drawArrays(gl.LINES, 0, lineBuffer.numItems);
+			
+			gl.bindBuffer(gl.ARRAY_BUFFER, pointsBuffer);
+			gl.vertexAttribPointer(shaderProgram.vertexPositionLoc, pointsBuffer.itemSize, gl.FLOAT, false, 0, 0);
+			gl.uniformMatrix4fv(shaderProgram.pMatrixLoc, 0, pMatrix);
+			
+			gl.drawArrays(gl.POINTS, 0, pointsBuffer.numItems);
+		}
+		
+		function webGLStart() {
+	        var canvas = document.getElementById("webgl_canvas");
+	        initGL(canvas);
+	        initShaders();
+	        initBuffers();
+	
+	        render();
+	    }
+		
+		
+		
+		function getRandomInt (min, max) {
+			return Math.floor(Math.random() * (max - min + 1)) + min;
+		}
+		
+		// todo : collinear가 생기지 않도록 이전 점들과 비교하면서 점을 생성하는 판단 함수 로직 추가
+		// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+		// Returns whether 3 points are collinear
+		// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+		
+		/*
+		bool collinear(int x1, int y1, int x2, int y2, int x3, int y3) {
+		  return (y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2);
+		}
+		*/
+		
+		
+		function getDistant(cpt, bl) {
+			var Vy = bl[1][0] - bl[0][0];
+			var Vx = bl[0][1] - bl[1][1];
+			return (Vx * (cpt[0] - bl[0][0]) + Vy * (cpt[1] -bl[0][1]))
+		}
+
+
+		function findMostDistantPointFromBaseLine(baseLine, points) {
+			var maxD = 0;
+			var maxPt = new Array();
+			var newPoints = new Array();
+			for (var idx in points) {
+				var pt = points[idx];
+				var d = getDistant(pt, baseLine);
+				
+				if ( d > 0) {
+					newPoints.push(pt);
+				} else {
+					continue;
+				}
+				
+				if ( d > maxD ) {
+					maxD = d;
+					maxPt = pt;
+				}
+			
+			} 
+			return {'maxPoint':maxPt, 'newPoints':newPoints}
+		}
+		
+		var allBaseLines = new Array();
+		function buildConvexHull(baseLine, points) {
+			
+			allBaseLines.push(baseLine)
+			var convexHullBaseLines = new Array();
+			var t = findMostDistantPointFromBaseLine(baseLine, points);
+			if (t.maxPoint.length) { // if there is still a point "outside" the base line
+				convexHullBaseLines = 
+					convexHullBaseLines.concat( 
+						buildConvexHull( [baseLine[0],t.maxPoint], t.newPoints) 
+					);
+				convexHullBaseLines = 
+					convexHullBaseLines.concat( 
+						buildConvexHull( [t.maxPoint,baseLine[1]], t.newPoints) 
+					);
+				return convexHullBaseLines;
+			} else {  // if there is no more point "outside" the base line, the current base line is part of the convex hull
+				return [baseLine];
+			}    
+		}
+		
+		function getConvexHull(points) {
+			//find first baseline
+			var maxX, minX;
+			var maxPt, minPt;
+			for (var idx in points) {
+				var pt = points[idx];
+				if (pt[0] > maxX || !maxX) {
+					maxPt = pt;
+					maxX = pt[0];
+				}
+				if (pt[0] < minX || !minX) {
+					minPt = pt;
+					minX = pt[0];
+				}
+			}
+			var ch = [].concat(buildConvexHull([minPt, maxPt], points),
+							   buildConvexHull([maxPt, minPt], points))
+			return ch;
+		}
+	</script>
+
+</head>
+
+<body onload="webGLStart()">
+	Three simple dots where pointsize = 4<br />
+	
+	<canvas id="webgl_canvas" width="640" height="480"></canvas>
+</body>
+
+</html>
